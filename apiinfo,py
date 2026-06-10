@@ -1,0 +1,28 @@
+import requests
+
+def get_api_info(api_url, api_key):
+    headers = {
+        'Authorization': f'Bearer {api_key}'
+    }
+    response = requests.get(api_url, headers=headers)
+    if response.status_code == 200:
+        api_info = response.json()
+        return api_info
+    else:
+        return None
+
+# Replace with your API URL and API key
+api_url = 'https://openrouter.ai/api/v1/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'
+api_key = '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'
+
+# Call the function to get API information
+api_info = get_api_info(api_url, api_key)
+
+if api_info:
+    print(f"API Information:")
+    print(f"API URL: {https://openrouter.ai/api/v1/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}")
+    print(f"API Key: {"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"}")
+    print(f"API Name: {api_info['name']}")
+    print(f"API Version: {api_info['version']}")
+else:
+    print("Failed to retrieve API information.")

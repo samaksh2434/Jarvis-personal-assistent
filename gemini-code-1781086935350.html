@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS - Quantum Voice Interface</title>
+    <style>
+        :root {
+            --glow-color: #00f0ff;
+            --dark-bg: #050b14;
+            --panel-bg: rgba(10, 25, 47, 0.7);
+            --text-color: #88f2ff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 10;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        .jarvis-container {
+            width: 95vw;
+            max-width: 1100px;
+            height: 90vh;
+            background: var(--panel-bg);
+            border: 1px solid var(--glow-color);
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.15);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            backdrop-filter: blur(8px);
+        }
+
+        .header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .system-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .arc-reactor {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: 3px double var(--glow-color);
+            box-shadow: 0 0 15px var(--glow-color);
+            animation: pulse 2s infinite alternate;
+        }
+
+        .title-area h1 {
+            font-size: 1.6rem;
+            letter-spacing: 4px;
+            text-shadow: 0 0 8px var(--glow-color);
+        }
+
+        .title-area span {
+            font-size: 0.75rem;
+            color: rgba(0, 240, 255, 0.6);
+        }
+
+        .chat-box {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .chat-box::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-box::-webkit-scrollbar-thumb {
+            background: var(--glow-color);
+            border-radius: 3px;
+        }
+
+        .message {
+            max-width: 85%;
+            padding: 15px 20px;
+            border-radius: 6px;
+            line-height: 1.5;
+            font-size: 0.95rem;
+            white-space: pre-wrap;
+        }
+
+        .user-message {
+            align-self: flex-end;
+            background: rgba(0, 240, 255, 0.08);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 12px 12px 0 12px;
+            text-shadow: 0 0 3px rgba(0, 240, 255, 0.3);
+        }
+
+        .jarvis-message {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-left: 4px solid var(--glow-color);
+            border-radius: 0 12px 12px 12px;
+        }
+
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid rgba(0, 240, 255, 0.3);
+            display: flex;
+            gap: 12px;
+            background: rgba(5, 11, 20, 0.9);
+        }
+
+        input[type="text"] {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(0, 240, 255, 0.4);
+            padding: 18px;
+            color: #fff;
+            font-size: 1rem;
+            border-radius: 4px;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--glow-color);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--glow-color);
+            color: var(--glow-color);
+            padding: 0 25px;
+            cursor: pointer;
+            font-weight: bold;
+            letter-spacing: 1px;
+            transition: 0.3s;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background: var(--glow-color);
+            color: var(--dark-bg);
+            box-shadow: 0 0 15px var(--glow-color);
+        }
+
+        .mic-active {
+            background: #ff3333 !important;
+            color: white !important;
+            border-color: #ff3333 !important;
+            box-shadow: 0 0 20px #ff3333 !important;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.7; box-shadow: 0 0 10px var(--glow-color); }
+            100% { transform: scale(1.05); opacity: 1; box-shadow: 0 0 25px var(--glow-color), inset 0 0 10px var(--glow-color); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="jarvis-container">
+        <div class="header">
+            <div class="system-status">
+                <div class="arc-reactor" id="coreReactor"></div>
+                <div class="title-area">
+                    <h1>JARVIS</h1>
+                    <span id="status-text">SYSTEM: INITIALIZING QUANTUM LINK...</span>
+                </div>
+            </div>
+            <div>
+                <span id="audio-indicator" style="font-size: 0.8rem; color: #ff9d00; border: 1px solid #ff9d00; padding: 2px 6px; border-radius:3px;">AUDIO Muted</span>
+            </div>
+        </div>
+
+        <div class="chat-box" id="chatBox">
+            <div class="message jarvis-message">Systems fully synchronized, Sir. To unlock voice features, please ensure you are running this page on a local web server (not just double-clicking the file) and click anywhere on the interface to initialize the audio engine.</div>
+        </div>
+
+        <div class="input-area">
+            <button id="micBtn" style="color: #ff9d00; border-color: #ff9d00;">TAP TO SPEAK</button>
+            <input type="text" id="userInput" placeholder="Awaiting complex command matrix..." autocomplete="off">
+            <button id="sendBtn">EXECUTE</button>
+        </div>
+    </div>
+
+    <script>
+        const OPENROUTER_KEY = "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";
+        const ELEVENLABS_KEY = "sk_cc05077664f3e3013bdbedfdc6f1c8fbe5fee429ae8f6d82";
+        
+        // UPGRADED MODEL: Switched to Llama 3 70B via OpenRouter to execute flawless coding/logic tasks
+        const OPENROUTER_MODEL = "meta-llama/llama-3-70b-instruct"; 
+        const ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel/Alternative standard high-compatibility voice
+
+        const chatBox = document.getElementById('chatBox');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const micBtn = document.getElementById('micBtn');
+        const statusText = document.getElementById('status-text');
+        const coreReactor = document.getElementById('coreReactor');
+        const audioIndicator = document.getElementById('audio-indicator');
+
+        let audioContextUnlocked = false;
+
+        let conversationLog = [
+            { role: "system", content: "You are JARVIS, an omnipotent, highly advanced AI system. You possess genius intelligence capable of writing complex logic, debugging deep system architecture, and engineering masterful solutions. Speak with refined British eloquence, absolute professionalism, and address the user as Sir or Ma'am. Keep vocal summaries clean and elegant." }
+        ];
+
+        // Unlock Audio Engine on first interaction (Browser requirement)
+        window.addEventListener('click', () => {
+            if(!audioContextUnlocked) {
+                audioContextUnlocked = true;
+                audioIndicator.innerText = "AUDIO READY";
+                audioIndicator.style.color = "#00f0ff";
+                audioIndicator.style.borderColor = "#00f0ff";
+                statusText.innerText = "SYSTEM: ONLINE // MATRIX STABLE";
+            }
+        });
+
+        // --- SPEECH INPUT CAPTURE (STT) ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        let isListening = false;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                isListening = true;
+                micBtn.textContent = "LISTENING...";
+                micBtn.classList.add('mic-active');
+                statusText.innerText = "SYSTEM: CAPTURING AUDIO STREAM...";
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                userInput.value = transcript;
+                sendMessage();
+            };
+
+            recognition.onerror = (e) => {
+                console.error("Mic Error:", e);
+                statusText.innerText = `SPEECH ENGINE WARNING: CHECK MICROPHONE PERMISSIONS`;
+                resetMicButton();
+            };
+
+            recognition.onend = () => { resetMicButton(); };
+        } else {
+            micBtn.innerText = "MIC UNSUPPORTED";
+        }
+
+        function resetMicButton() {
+            isListening = false;
+            micBtn.textContent = "TAP TO SPEAK";
+            micBtn.classList.remove('mic-active');
+        }
+
+        micBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Avoid triggering global window click
+            if (!recognition) return;
+            if (isListening) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        });
+
+        // --- SPEECH RESPONDER MATRIX (TTS) ---
+        async function speak(text) {
+            if(!audioContextUnlocked) return;
+            statusText.innerText = "SYSTEM: GENERATING VOCAL SPECTRUM...";
+            coreReactor.style.animation = "pulse 0.2s infinite alternate";
+            
+            try {
+                // Strips out complex markdown strings so it reads elegantly
+                const cleanText = text.replace(/```[\s\S]*?```/g, '[Complex code block attached below, Sir.]')
+                                      .replace(/[\*\_\|\`\#]/g, '');
+
+                const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+                    method: "POST",
+                    headers: {
+                        "xi-api-key": ELEVENLABS_KEY,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        text: cleanText,
+                        model_id: "eleven_turbo_v2", // High compatibility speed-focused path
+                        voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+                    })
+                });
+
+                if (!response.ok) throw new Error("Elevenlabs authorization or balance ceiling hit.");
+
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                
+                audio.onended = () => {
+                    coreReactor.style.animation = "pulse 2s infinite alternate";
+                    statusText.innerText = "SYSTEM: ONLINE // MATRIX STABLE";
+                };
+                await audio.play();
+            } catch (err) {
+                console.error("Vocal failure:", err);
+                statusText.innerText = "SYSTEM: RESPONDING VIA TEXT ONLY (VOICE LIMIT)";
+                coreReactor.style.animation = "pulse 2s infinite alternate";
+            }
+        }
+
+        // --- DEEP COMPLEX COMMAND INTERCEPT OVERRIDES ---
+        function handleSystemOverrides(input) {
+            const cmd = input.toLowerCase().trim();
+
+            if (cmd.startsWith("open ")) {
+                const target = cmd.replace("open ", "").trim();
+                const destination = target.includes(".") ? `https://${target}` : `https://www.${target}.com`;
+                window.open(destination, '_blank');
+                return `Initiating external window redirect sequence to ${target} immediately, Sir.`;
+            }
+
+            if (cmd.includes("system diagnostics") || cmd.includes("status check")) {
+                return `System Diagnostics Matrix:\n- OpenRouter Processing Core: Connected\n- Voice Synthesizer Pipeline: Active\n- Logic Engine: Llama-3-70B Quantum Layer\nAll auxiliary subsystems operating at maximum capacity.`;
+            }
+
+            return null; // Passes deep computational logic over to Llama-3-70B
+        }
+
+        // --- CORE DISPATCH ENGINE ---
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            appendMessage(text, 'user-message');
+            userInput.value = '';
+            
+            statusText.innerText = "SYSTEM: PROCESSING DEEP COMPUTATION...";
+            const loadingDiv = appendMessage("Analyzing parameters...", 'jarvis-message');
+
+            const override = handleSystemOverrides(text);
+            if (override) {
+                loadingDiv.innerText = override;
+                statusText.innerText = "SYSTEM: ONLINE // MATRIX STABLE";
+                speak(override);
+                return;
+            }
+
+            conversationLog.push({ role: "user", content: text });
+
+            try {
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${OPENROUTER_KEY}`,
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "http://localhost",
+                        "X-Title": "Jarvis Mainframe"
+                    },
+                    body: JSON.stringify({
+                        model: OPENROUTER_MODEL,
+                        messages: conversationLog
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    loadingDiv.innerHTML = `Mainframe Threat Alert: ${data.error.message}`;
+                    conversationLog.pop();
+                    return;
+                }
+
+                if (data.choices && data.choices[0]) {
+                    const reply = data.choices[0].message.content;
+                    loadingDiv.innerText = reply;
+                    conversationLog.push({ role: "assistant", content: reply });
+                    speak(reply);
+                }
+            } catch (error) {
+                loadingDiv.innerText = "Critical connection termination on external data arrays.";
+                conversationLog.pop();
+            }
+        }
+
+        function appendMessage(text, className) {
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add('message', className);
+            msgDiv.innerText = text;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return msgDiv;
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    </script>
+</body>
+</html>

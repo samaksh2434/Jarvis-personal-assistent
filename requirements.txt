@@ -1,0 +1,31 @@
+# JARVIS Requirements
+# Run: pip install -r requirements.txt
+
+# ── CORE (required) ───────────────────────────────────────────────────────────
+requests>=2.31.0           # HTTP calls to all AI APIs (no SDK needed)
+python-dotenv>=1.0.0       # .env file loading
+
+# ── VOICE INPUT ───────────────────────────────────────────────────────────────
+SpeechRecognition>=3.10.0  # Speech-to-text
+PyAudio>=0.2.13            # Microphone access
+# If PyAudio fails: sudo apt install python3-pyaudio  OR  brew install portaudio
+
+# ── AUDIO PLAYBACK (need at least one) ───────────────────────────────────────
+pygame>=2.5.0              # Best audio playback (recommended)
+# ffplay comes with ffmpeg — install via: sudo apt install ffmpeg
+
+# ── TTS FALLBACK (if no ElevenLabs key) ──────────────────────────────────────
+gTTS>=2.5.0                # Google TTS (British accent, needs internet)
+pyttsx3>=2.90              # Offline TTS fallback
+
+# ── SCREEN MONITORING ─────────────────────────────────────────────────────────
+mss>=9.0.1                 # Screen capture
+
+# ── SYSTEM INFO ───────────────────────────────────────────────────────────────
+psutil>=5.9.0              # CPU, RAM, battery, processes
+
+# ── WEB SEARCH ────────────────────────────────────────────────────────────────
+duckduckgo-search>=6.0.0   # Free web search, no key needed
+
+# ── CLIPBOARD ─────────────────────────────────────────────────────────────────
+pyperclip>=1.8.2           # Cross-platform clipboard
