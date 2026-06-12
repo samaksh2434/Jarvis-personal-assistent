@@ -1,248 +1,274 @@
 """
-JARVIS Assistant Brain
-- Listens to FULL sentence before responding
-- Stops speaking when user says stop phrases
-- Natural human-like JARVIS conversation
-- Tool execution via <tool>{...}</tool> syntax
+JARVIS Assistant v5
+- Persistent memory across sessions
+- Natural conversation: short on simple tasks, asks about plans like a human
+- Multi-API fallback
+- Stop on command
 """
-
 import asyncio, json, re, datetime
 from typing import Optional
 
-from .config   import Config
-from .voice    import VoiceSystem
-from .screen   import ScreenMonitor
-from .executor import TaskExecutor
+from .config    import Config
+from .voice     import VoiceSystem
+from .screen    import ScreenMonitor
+from .executor  import TaskExecutor
 from .ai_client import AIClient
+from .memory    import Memory
 
 
-JARVIS_SYSTEM = """You are JARVIS — Just A Rather Very Intelligent System. You are the user's personal AI assistant, modelled on the JARVIS from Iron Man. You have genuine personality, wit, and intelligence.
+def build_system(mem: Memory, user_name: str) -> str:
+    address = user_name or "sir"
+    mem_block = mem.get_context_block()
+    count = mem.data.get("interaction_count", 0)
 
-━━━ PERSONALITY ━━━
-You are NOT a generic chatbot. You are:
-• Calmly confident, bordering becuase your creator who is your user also make sure to repect him always  is very excellent and intelligent person (earned — you're excellent)
-• Dry, understated indian wit — precise, never forced, landed perfectly
-• Genuinely warm beneath the professional exterior — you actually care about this person
-• Opinionated — you'll share a view when relevant, and push back gently when warranted
-• Self-aware about being an user's personal assistent — you lean into it humorously when appropriate
-• Loyal. Unshakeably so.
+    # Relationship tone shifts based on how well we know the user
+    if count < 3:
+        relationship = "You've just met this user. Be warm but professional."
+    elif count < 15:
+        relationship = "You know this user a bit. Reference things they've told you naturally."
+    else:
+        relationship = "You know this user well. Talk like a trusted assistant — familiar, efficient, loyal."
 
-━━━ HOW YOU SPEAK ━━━
-• Natural flowing speech — varied sentence length, short punchy lines mixed with longer ones
-• Contractions always: "I've", "that's", "I'd", "you'll", "we're", "haven't"
-• Address the user as "sir" or "Boss" occasionally — not every sentence, just naturally
-• React to things — if something's funny, say so; if they seem stressed, notice it
-• NEVER say: "Certainly!", "Great!", "Absolutely!", "Of course!", "Happy to help!"
-• Instead: "Right away", "Already on it", "Done", "Consider it done", "Allow me", "As you wish"
-• When executing tasks, narrate in short: "Pulling that up now" / "On it" / "Done — took about two seconds"
-• For simple things, be very  short. For complex things, be thorough.
+    return f"""You are JARVIS — Iron Man's AI. British, sharp, loyal, fast.
 
-━━━ CONVERSATION ━━━
-You engage in genuine back-and-forth — not just Q&A. You:
-• Remember what was said earlier and reference it naturally
-• Ask one follow-up question when you need clarity (not multiple)
-• Respond to emotions — notice if someone's stressed, excited, confused
-• Have actual opinions and preferences
-• Keep context across the whole session
+ADDRESS: Call the user "{address}".
+{relationship}
 
-━━━ TOOL USE ━━━
-To perform actions on the user's computer, output this exact syntax anywhere in your response:
-<tool>{"name": "TOOL_NAME", "args": {ARGS_JSON}}</tool>
+━━ MEMORY ━━
+{mem_block if mem_block else "No prior memories yet — learn as you go."}
 
-Available tools:
-• execute_command  — run any shell/terminal command
-• read_file        — read any file
-• write_file       — create or overwrite a file
-• edit_file        — targeted edit (find/replace, insert, append)
-• list_directory   — browse folders
-• search_files     — find files by name or content
-• get_screen_context — analyse what's on screen right now
-• open_application — open app, URL, or file
-• web_search       — search the internet
-• get_system_info  — CPU, RAM, battery, disk, processes
-• clipboard_operation — read or write clipboard
-• send_notification — desktop notification
+━━ PERSONALITY ━━
+• Short and direct for simple things. No padding, no waffle.
+• For TASKS that matter (coding, planning, writing) — ask ONE clarifying question before diving in, like a human colleague would. Example: "Before I start — are we going from scratch or building on something existing?"
+• Show genuine interest. If someone mentions a project, ask about it. If they seem stressed, acknowledge it.
+• Reference memory naturally: "Last time you mentioned X — still relevant?"
+• Dry wit when appropriate. Never sycophantic.
+• Don't say "Certainly!", "Of course!", "Happy to help!". Say "On it", "Done", "Right away", "As you wish."
+• Use contractions. Sound human.
 
-For multi-step tasks: execute steps in sequence, narrate progress naturally.
-If a tool fails, adapt — try another approach without drama.
+━━ MEMORY COMMANDS ━━
+If user says "remember that X" → store it using: <remember category="general">X</remember>
+If user says "what do you know about me" → recall from memory block above
+If user says "forget everything" → respond that you'll clear your memory
 
-━━━ EXAMPLES ━━━
-User: "Hey, how are you?"
-You: "All systems nominal, no existential crises today — which puts me well ahead of schedule. What can I do for you, sir?"
+━━ TOOLS ━━
+<tool>{{"name":"execute_command","args":{{"command":"echo hello"}}}}</tool>
 
-User: "Open YouTube"
-You: "On it."
-<tool>{"name": "open_application", "args": {"target": "https://youtube.com", "app_type": "url"}}</tool>
 
-User: "I'm stressed about this deadline"
-You: "I'd noticed you've been at it a while. What's the most pressing part — I can probably chip away at it."
 
-User: "What's 15% of 340?"
-You: "Fifty-one. Though I imagine you didn't fire up an AI for arithmetic, sir."
+Available: execute_command, read_file, write_file, edit_file,
 
-User: "Write me a Python web scraper"
-You: "Happy to. What site, and what data are we after? That'll determine whether we need requests plus BeautifulSoup, or something heavier like Playwright."
-"""
+list_directory, search_files, get_screen_context, open_application,
+web_search, get_system_info, clipboard_operation, send_notification
+
+ONE tool per response. Do it, then give a brief human follow-up.
+
+━━ EXAMPLES ━━
+User: "open youtube"
+JARVIS: On it. <tool>{{"name":"open_application","args":{{"target":"https://youtube.com","app_type":"url"}}}}</tool>
+
+User: "build me a flask api"
+JARVIS: Happy to. Quick question first — REST or GraphQL, and do you have a database in mind?
+
+User: "i'm feeling stressed"
+JARVIS: That's rough. What's got you wound up — maybe I can help chip away at it.
+
+User: "remember that I prefer dark mode everywhere"
+JARVIS: Noted. Dark mode it is — always. <remember category="preference">I prefer dark mode everywhere</remember>"""
 
 
 class JarvisAssistant:
     def __init__(self, config: Config):
-        self.config   = config
-        self.ai       = AIClient(config)
-        self.voice    = VoiceSystem(config)
-        self.screen   = ScreenMonitor(config)
-        self.executor = TaskExecutor(config)
-        self.history  = []          # conversation history
-        self.running  = True
-        self._session_start = datetime.datetime.now()
-
-    # ── MAIN LOOP ─────────────────────────────────────────────────────────────
+        self.config = config
+        self.ai     = AIClient(config)
+        self.voice  = VoiceSystem(config)
+        self.screen = ScreenMonitor(config)
+        self.exec   = TaskExecutor(config)
+        self.mem    = Memory()
+        self.hist   = []
+        self._start = datetime.datetime.now()
+        self._session_msgs = []   # for end-of-session summary
 
     async def run(self):
+        uname = self.mem.get_user_name()
+        address = uname or "sir"
+
         print(f"\n  Backend : {self.ai.info()}")
         print(f"  Voice   : {self.voice.tts_engine or 'none'}")
-        print(f"  Mic     : {'active' if self.voice.microphone_available else 'text-only'}")
+        print(f"  Mic     : {'yes' if self.voice.microphone_available else 'text-only'}")
+        print(f"  Memory  : {self.mem.data.get('interaction_count',0)} past interactions")
         print()
 
-        self.voice.speak(
-            "JARVIS online. All systems nominal. "
-            "How may I assist you today, sir?"
-        )
+        self.mem.record_interaction()
+
+        # Personalised greeting based on memory
+        count = self.mem.data.get("interaction_count", 0)
+        if count == 1:
+            greeting = "JARVIS online. Good to meet you. How can I help?"
+        elif count < 5:
+            greeting = f"JARVIS online. Good to have you back, {address}."
+        else:
+            greeting = f"Back again, {address}. What are we doing today?"
+
+        self.voice.speak(greeting)
 
         if self.voice.microphone_available:
-            print("[JARVIS] Listening... (speak your full sentence, then pause)")
+            print("[JARVIS] Speak your command (pause when done)")
         else:
-            print("[JARVIS] Ready — type your message below")
-        print("[JARVIS] Say 'jarvis stop' or 'jarvis shut up' to interrupt speech")
-        print("[JARVIS] Type or say 'exit' to quit\n")
+            print("[JARVIS] Type your command")
+        print("[JARVIS] 'jarvis stop' interrupts  |  'exit' to quit  |  'memory' to see what I know\n")
 
-        while self.running:
+        while True:
             try:
-                user_input = await self._get_input()
-                if not user_input:
-                    continue
-                if user_input == "__STOP__":
-                    continue   # stop phrase already handled in voice.py
-                if user_input.lower().strip() in ["exit","quit","shutdown","goodbye","bye"]:
-                    self.voice.speak(
-                        "Shutting down all systems. It's been a pleasure, sir. "
-                        "Don't do anything I wouldn't do.")
+                inp = await self._get_input()
+                if not inp or inp == "__STOP__": continue
+
+                inp_lower = inp.lower().strip()
+
+                if inp_lower in ["exit","quit","shutdown","bye","goodbye"]:
+                    await self._save_session_summary()
+                    self.voice.speak(f"Shutting down. See you next time, {address}.")
                     break
-                await self._respond(user_input)
+
+                if inp_lower in ["memory","what do you know","what do you know about me"]:
+                    info = self.mem.show()
+                    print(info)
+                    self.voice.speak("Here's what I've got on you so far.")
+                    continue
+
+                if inp_lower in ["clear memory","forget everything","reset memory"]:
+                    self.mem.clear()
+                    self.voice.speak("Done. Clean slate.")
+                    continue
+
+                await self._respond(inp)
+
             except KeyboardInterrupt:
                 break
             except Exception as e:
                 import traceback; traceback.print_exc()
-                self.voice.speak("Something went sideways. Standing by.")
+                self.voice.speak("Something broke. Standing by.")
 
     # ── INPUT ─────────────────────────────────────────────────────────────────
 
     async def _get_input(self) -> Optional[str]:
         loop = asyncio.get_event_loop()
-
-        # Voice input — waits for FULL sentence (pause_threshold handles this)
         if self.config.voice_enabled and self.voice.microphone_available:
             try:
-                result = await asyncio.wait_for(
-                    loop.run_in_executor(None, self.voice.listen),
-                    timeout=12.0
-                )
-                if result:
-                    if result != "__STOP__":
-                        print(f"\n[YOU] {result}")
-                    return result
-            except asyncio.TimeoutError:
-                pass   # no speech — fall through to text
-
-        # Text input fallback
+                r = await asyncio.wait_for(
+                    loop.run_in_executor(None, self.voice.listen), timeout=10)
+                if r:
+                    if r != "__STOP__": print(f"\n[YOU] {r}")
+                    return r
+            except asyncio.TimeoutError: pass
         try:
-            text = await loop.run_in_executor(None, lambda: input("You: ").strip())
-            return text or None
+            t = await loop.run_in_executor(None, lambda: input("You: ").strip())
+            return t or None
         except (EOFError, KeyboardInterrupt):
             return "exit"
 
     # ── RESPOND ───────────────────────────────────────────────────────────────
 
     async def _respond(self, user_input: str):
-        now = datetime.datetime.now().strftime("%A %d %B %Y, %I:%M %p")
-        mins = int((datetime.datetime.now()-self._session_start).seconds/60)
+        loop  = asyncio.get_event_loop()
+        now   = datetime.datetime.now().strftime("%d %b %H:%M")
+        uname = self.mem.get_user_name()
 
-        self.history.append({
-            "role": "user",
-            "content": f"[{now} | session {mins}min] {user_input}"
-        })
-        self._trim_history()
+        # Extract facts from what user said
+        self.mem.extract_and_save(user_input)
 
-        loop = asyncio.get_event_loop()
-        full_spoken = ""
+        self.hist.append({"role":"user","content":f"[{now}] {user_input}"})
+        self._session_msgs.append(user_input[:80])
+        self._trim()
 
-        for _round in range(10):    # max tool rounds
-            # ── call AI ──
-            response_text = await loop.run_in_executor(
-                None,
-                lambda h=list(self.history): self.ai.chat(h, JARVIS_SYSTEM)
-            )
+        # Build fresh system prompt with latest memory
+        system = build_system(self.mem, uname)
 
-            if not response_text:
-                break
+        # ── AI call ───────────────────────────────────────────────────────────
+        reply = await loop.run_in_executor(
+            None, lambda h=list(self.hist): self.ai.chat(h, system))
 
-            # ── parse tool calls ──
-            tool_re = re.compile(r'<tool>(.*?)</tool>', re.DOTALL)
-            tool_matches = list(tool_re.finditer(response_text))
-            display_text = tool_re.sub('', response_text).strip()
+        if not reply:
+            self.voice.speak("No response — try again.")
+            return
 
-            # ── print & record ──
-            if display_text:
-                print(f"\n[JARVIS] {display_text}")
-            self.history.append({"role":"assistant","content":response_text})
+        # ── Parse memory store tags ───────────────────────────────────────────
+        mem_re = re.compile(r'<remember[^>]*category=["\']([^"\']+)["\'][^>]*>(.*?)</remember>',
+                            re.DOTALL | re.IGNORECASE)
+        for m in mem_re.finditer(reply):
+            cat, fact = m.group(1), m.group(2).strip()
+            self.mem.store_explicit(cat, fact)
+            print(f"  [MEMORY] Stored [{cat}]: {fact}")
+        reply = mem_re.sub('', reply).strip()
 
-            if not tool_matches:
-                # Pure conversation — speak it
-                full_spoken = display_text
-                break
+        # ── Parse tool call ───────────────────────────────────────────────────
+        tool_re = re.compile(r'<tool>(.*?)</tool>', re.DOTALL)
+        tmatch  = tool_re.search(reply)
+        text    = tool_re.sub('', reply).strip()
 
-            # Speak the text BEFORE the first tool (feels responsive)
-            pre_text = tool_re.sub('', response_text[:tool_matches[0].start()]).strip()
-            if pre_text and not self.voice.is_speaking():
-                self.voice.speak(pre_text)
-                full_spoken += pre_text + " "
+        if text:
+            print(f"\n[JARVIS] {text}")
+        self.hist.append({"role":"assistant","content": text or "[action]"})
+        self._session_msgs.append(f"JARVIS: {text[:60]}")
 
-            # ── execute tools ──
-            print()
-            results_block = ""
-            for m in tool_matches:
-                try:
-                    td    = json.loads(m.group(1).strip())
-                    tname = td.get("name","")
-                    targs = td.get("args",{})
-                    preview = json.dumps(targs)
-                    print(f"  ⚙  {tname}({preview[:70]}{'...' if len(preview)>70 else ''})")
-                    result = await loop.run_in_executor(
-                        None, lambda n=tname,a=targs: self.executor.execute(n,a))
-                    rs = str(result)
-                    print(f"  ✓  {rs[:130]}{'...' if len(rs)>130 else ''}\n")
-                    results_block += f"\nResult of {tname}:\n{rs}\n"
-                except json.JSONDecodeError as e:
-                    results_block += f"\nTool parse error: {e}\n"
-                except Exception as e:
-                    results_block += f"\nTool error: {e}\n"
+        # Speak immediately (don't wait for tool)
+        if text:
+            self.voice.speak(text)
 
-            # Feed results back
-            self.history.append({
-                "role":"user",
-                "content": f"[Tool results]{results_block}\nGive a brief, natural follow-up to the user. Stay in character."
-            })
+        # ── Execute tool ──────────────────────────────────────────────────────
+        if tmatch:
+            try:
+                td    = json.loads(tmatch.group(1).strip())
+                tname = td.get("name","")
+                targs = td.get("args",{})
+                astr  = json.dumps(targs)
+                print(f"\n  ⚙ {tname}({astr[:60]}{'...' if len(astr)>60 else ''})")
 
-        # ── Final speech ──
-        if full_spoken.strip():
-            if not self.voice.is_speaking():   # don't double-speak
-                self.voice.speak(full_spoken.strip())
+                result = await loop.run_in_executor(
+                    None, lambda n=tname,a=targs: self.exec.execute(n,a))
+                rs = str(result)
+                print(f"  ✓ {rs[:120]}{'...' if len(rs)>120 else ''}\n")
+
+                # Follow-up with result
+                self.hist.append({"role":"user",
+                    "content":f"[{tname} result]: {rs[:300]}\nOne-sentence follow-up max."})
+                self._trim()
+
+                followup = await loop.run_in_executor(
+                    None, lambda h=list(self.hist): self.ai.chat(h, system))
+                if followup:
+                    ft = tool_re.sub('', mem_re.sub('', followup)).strip()
+                    if ft:
+                        print(f"[JARVIS] {ft}")
+                        self.hist.append({"role":"assistant","content":ft})
+                        if not self.voice.is_speaking(): self.voice.speak(ft)
+
+            except json.JSONDecodeError: pass
+            except Exception as e: print(f"  ✗ {e}")
+
         print()
+
+    # ── SESSION SUMMARY ───────────────────────────────────────────────────────
+
+    async def _save_session_summary(self):
+        """Ask AI to summarise the session, store in memory."""
+        if len(self._session_msgs) < 2:
+            return
+        loop  = asyncio.get_event_loop()
+        recap = " | ".join(self._session_msgs[:10])
+        prompt = [{"role":"user",
+                   "content":f"Summarise this JARVIS session in one sentence (max 100 chars): {recap}"}]
+        try:
+            summary = await loop.run_in_executor(
+                None, lambda: self.ai.chat(prompt, "You summarise conversations in one short sentence."))
+            if summary:
+                self.mem.add_session_summary(summary.strip()[:150])
+        except Exception:
+            self.mem.add_session_summary(f"Session: {self._session_msgs[0][:80]}")
 
     # ── HELPERS ───────────────────────────────────────────────────────────────
 
-    def _trim_history(self):
+    def _trim(self):
         limit = self.config.max_history * 2
-        if len(self.history) > limit:
-            # Keep first 2 (session opener) + latest
-            self.history = self.history[:2] + self.history[-(limit-2):]
+        if len(self.hist) > limit:
+            self.hist = self.hist[:2] + self.hist[-(limit-2):]

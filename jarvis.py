@@ -1,41 +1,32 @@
 #!/usr/bin/env python3
-"""
-J.A.R.V.I.S — Just A Rather Very Intelligent System
-"""
+"""JARVIS — Just A Rather Very Intelligent System v5"""
 import asyncio, sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from core.assistant import JarvisAssistant
 from core.config    import Config
+from core.memory    import Memory
 
-BANNER = """
-  ╔══════════════════════════════════════════════════╗
-  ║    J . A . R . V . I . S                         ║
-  ║    Just A Rather Very Intelligent System  v2.0   ║
-  ╚══════════════════════════════════════════════════╝
-"""
+print("""
+  ╔═══════════════════════════════════════╗
+  ║  J.A.R.V.I.S  v5  — Daily Driver    ║
+  ╚═══════════════════════════════════════╝""")
 
-def main():
-    print(BANNER)
-    cfg = Config()
+cfg  = Config()
+mem  = Memory()
+chain = cfg.get_api_chain()
+if not chain:
+    print("\n  [ERROR] No API keys in .env\n"); sys.exit(1)
 
-    if not cfg.get_backend():
-        print("  [ERROR] No API key found in .env")
-        print()
-        print("  ── FREE OPTIONS ──────────────────────────────")
-        print("  OpenRouter (free models):  OPENROUTER_API_KEY=...")
-        print("  Groq       (free, fast):   GROQ_API_KEY=...")
-        print()
-        print("  ── VOICE ─────────────────────────────────────")
-        print("  ElevenLabs (human voice):  ELEVENLABS_API_KEY=...")
-        print()
-        print("  Add keys to jarvis/.env and restart.")
-        sys.exit(1)
+uname = mem.get_user_name()
+count = mem.data.get("interaction_count", 0)
+print(f"  APIs      : {len(chain)} backend(s) — {', '.join(b for b,k,m in chain)}")
+print(f"  Memory    : {len(mem.data.get('facts',{}))} facts stored" +
+      (f" | user: {uname}" if uname else "") +
+      (f" | {count} sessions" if count else ""))
+print(f"  Voice     : {'ElevenLabs' if cfg.elevenlabs_api_key else 'fallback TTS'}")
+print()
 
-    assistant = JarvisAssistant(cfg)
-    try:
-        asyncio.run(assistant.run())
-    except KeyboardInterrupt:
-        print("\n\n  JARVIS: Shutting down. Goodbye, sir.\n")
-
-if __name__ == "__main__":
-    main()
+try:
+    asyncio.run(JarvisAssistant(cfg).run())
+except KeyboardInterrupt:
+    print("\n  JARVIS offline.\n")
