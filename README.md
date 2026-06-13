@@ -2,10 +2,19 @@
 
 > *"Just A Rather Very Intelligent System"*
 > Human-like male voice · Listens to full sentences · Stops on command · Any AI API
+
+Demo Video -https://drive.google.com/file/d/1DmBkePSoj19JOCmeEhxMnAk0JgjpWdCo/view?usp=sharing
+
+
+
 >
 > My aim here to build a personal relationship with the Ai we use the daily life the inspiration for this project was Jarvis from Iron man movies, here in this i have made a system in which the jarvis will remmber thing you will say to it and save that in its memory also i have made is an intent that the user can use it daily so it can handle the complex tasks like - "Jarvis open my spotify and pay the discover weekly" or "Jarvis i want to learn react can serch some good tutorials for me" etc. My aim here was to make it for free, so it has a lot of Ai api's. If the rate limit is reached, it can switch to another model, so you can work with the free tier of multiple AI models, and even if that doesn't work, then you can setup oolama for an offline model. 
 
 ---
+
+
+
+
 
 ## Quick Start
 
